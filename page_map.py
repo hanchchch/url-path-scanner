@@ -1,4 +1,4 @@
-from .pathscanner import scanner
+from .path_scanner import scanner
 import json
 
 class PageMap:
