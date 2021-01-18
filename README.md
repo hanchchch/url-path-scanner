@@ -1,4 +1,4 @@
-# url_path_scanner
+# path_scanner
 ## Feature
 Finds all paths of url which can be accessible with "a" tag.
 
@@ -10,8 +10,24 @@ Finds all paths of url which can be accessible with "a" tag.
 
 ## example
 ```python
-from urlpathscanner import url_path_scanner
+from urlpathscanner import scanner
 
-r = url_path_scanner('https://www.google.com', depth=2, pass_list=PASS_LIST, have_list=HAVE_LIST)
+r = scanner(URL, depth=2, pass_list=PASS_LIST, have_list=HAVE_LIST)
 print(r)
 ```
+
+# page_map
+## Feature
+Make page map (dict) using path_scanner
+
++ class PageMap
+    + Trie algorithm
+
+## example
+```python
+from urlpathscanner import make_page_map
+
+result = make_page_map(URL, pass_list=PASS_LIST, have_list=HAVE_LIST)
+with open('./page_map/page_map.json', 'a') as f:
+    f.write(json.dumps(result, indent=4, ensure_ascii=False))
+    f.write(',\n')
