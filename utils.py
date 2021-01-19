@@ -1,11 +1,5 @@
 from urllib.parse import urlparse, ParseResult
 
-def cut_path(path: str, no_cut: bool):
-    if no_cut:
-        return path
-    
-    return  path[:-1] if path.endswith('/') else path
-
 def check_list(parsed_url: ParseResult, pass_list: list=[], have_list: list=[], inval_paths: list=[]):
     scheme = parsed_url.scheme
     netloc = parsed_url.netloc

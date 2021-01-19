@@ -2,7 +2,7 @@ import requests
 from bs4 import BeautifulSoup
 from urllib.parse import urlparse
 from tqdm import tqdm
-from .utils import cut_path, check_list, is_domain_self
+from .utils import check_list, is_domain_self
 
 INVAL_PATHS = ['=', '?', ' ', '<', '>']
 
@@ -12,8 +12,6 @@ def gather_links(url: str, **kwargs):
 
     :param url: start url
     
-    :param no_cut: does not remove the last slash of paths
-
     :param self_only: gathers only if the link starts with start url
 
     :param path_only: returns path only if the link starts with start url
@@ -26,6 +24,7 @@ def gather_links(url: str, **kwargs):
     """
     try:
         r = requests.get(url)
+        print(url)
     except requests.exceptions.ConnectionError:
         print("ConnectionError: "+url)
         return []
@@ -35,8 +34,7 @@ def gather_links(url: str, **kwargs):
 
     soup = BeautifulSoup(r.text, "html.parser")
     parsed_url_self = urlparse(url)
-    no_cut = True if kwargs.get('no_cut') else False
-    path_self = cut_path(parsed_url_self.path, no_cut)
+    path_self = parsed_url_self.path
 
     pass_list = kwargs.get('pass_list') if kwargs.get('pass_list') is not None else []
     have_list = kwargs.get('have_list') if kwargs.get('have_list') is not None else []
@@ -72,8 +70,6 @@ def gather_links(url: str, **kwargs):
                 except IndexError:
                     continue
 
-
-
             raw_links.append(raw_link)
 
     links = []
@@ -81,7 +77,7 @@ def gather_links(url: str, **kwargs):
         parsed_url = urlparse(raw_link)
         scheme = parsed_url.scheme
         netloc = parsed_url.netloc
-        path = cut_path(parsed_url.path, no_cut)
+        path = parsed_url.path
         domain_self = False
 
         if check_list(parsed_url, pass_list, have_list, INVAL_PATHS):
