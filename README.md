@@ -1,6 +1,6 @@
 # path_scanner
 ## Feature
-Finds all paths of url which can be accessible with "a" tag.
+Finds all paths of url which can be accessible with "a" tag and javascript.
 
 + depth
     + Set the depth of recersive search

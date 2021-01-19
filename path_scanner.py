@@ -4,6 +4,7 @@ from urllib.parse import urlparse
 from tqdm import tqdm
 from .utils import cut_path, check_list, is_domain_self
 
+INVAL_PATHS = ['=', '?', ' ', '<', '>']
 
 def gather_links(url: str, **kwargs):
     """
@@ -23,8 +24,16 @@ def gather_links(url: str, **kwargs):
 
     :return: list of found paths
     """
-    html = requests.get(url).text
-    soup = BeautifulSoup(html, "html.parser")
+    try:
+        r = requests.get(url)
+    except requests.exceptions.ConnectionError:
+        print("ConnectionError: "+url)
+        return []
+    except requests.exceptions.InvalidURL:
+        print("InvalidURL: "+url)
+        return []
+
+    soup = BeautifulSoup(r.text, "html.parser")
     parsed_url_self = urlparse(url)
     no_cut = True if kwargs.get('no_cut') else False
     path_self = cut_path(parsed_url_self.path, no_cut)
@@ -32,25 +41,56 @@ def gather_links(url: str, **kwargs):
     pass_list = kwargs.get('pass_list') if kwargs.get('pass_list') is not None else []
     have_list = kwargs.get('have_list') if kwargs.get('have_list') is not None else []
 
-    links = []
+    raw_links = []
     for a in soup.find_all('a'):
         try:
             raw_link = a.attrs['href']
         except KeyError:
             continue
+        if 'javascript:' in raw_link:
+            try:
+                raw_link = raw_link.split('(')[1][1:]
+                raw_link = raw_link.split(')')[0][:-1]
+            except IndexError:
+                continue
+        raw_links.append(raw_link)
+
+    for script in soup.find_all('script'):
+        if script.string is None:
+            continue
+        script_parts = script.string.split('href')
+        for script_part in script_parts:
+            
+            if '=' not in script_part[:3]:
+                continue
+
+            try:
+                raw_link = script_part.split('"')[1]
+            except IndexError:
+                try:
+                    raw_link = script_part.split("'")[1]
+                except IndexError:
+                    continue
+
+
+
+            raw_links.append(raw_link)
+
+    links = []
+    for raw_link in raw_links:
         parsed_url = urlparse(raw_link)
         scheme = parsed_url.scheme
         netloc = parsed_url.netloc
         path = cut_path(parsed_url.path, no_cut)
         domain_self = False
 
-        if check_list(parsed_url, pass_list, have_list):
+        if check_list(parsed_url, pass_list, have_list, INVAL_PATHS):
             continue
-        
+
         if not parsed_url.scheme.startswith('http'):
             if not parsed_url.scheme == '':
                 continue
-
+        
         if is_domain_self(parsed_url_self, parsed_url):
             if path == path_self:
                 continue
