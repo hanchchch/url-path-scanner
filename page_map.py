@@ -1,31 +1,42 @@
-from .path_scanner import scanner
 import json
 
 class PageMap:
-    def __init__(self, domain: str):
+    def __init__(self, domain: str, breadth: int=15):
         self.domain = domain
         self.root = {domain: {}}
-
-    def insert(self, path_parts: list):
-        current = self.root[self.domain]
-
-        for part in path_parts:
-            if part not in current.keys():
-                current.update({part: {}})
-            current = current[part]
+        self.paths = set()
+        self.too_many = set()
+        self.breadth = 15
 
     def __str__(self):
         return json.dumps(self.root, indent=4, ensure_ascii=False)
 
-def make_page_map(url: str, pass_list: list=[], have_list: list=[]):
-    paths = scanner(url, pass_list=pass_list, have_list=have_list)
+    def paths_startwith(self, path):
+        result = 0
+        for path_hay in self.paths:
+            if path_hay.startswith(path):
+                result += 1
+        
+        return result
 
-    split_paths = []
-    for path in paths:
-        split_paths.append(path.split('/'))
+    def insert(self, path: str):
+        path_parts = path.split('/')
+        if path_parts[0] == '':
+            path_parts = path_parts[1:]
+        
+        current = self.root[self.domain]
+        current_path = ''
 
-    page_map = PageMap(url)
-    for path_parts in split_paths:
-        page_map.insert(path_parts)
+        for part in path_parts:
+            current_path += f'/{part}'
+            paths_startwith_count = self.paths_startwith(current_path)
+            if paths_startwith_count == 0:
+                self.paths.add(current_path)
 
-    return page_map.root
+            elif paths_startwith_count > self.breadth:
+                if current_path != '/':
+                    self.too_many.add(current_path)
+
+            if part not in current.keys():
+                current.update({part: {}})
+            current = current[part]

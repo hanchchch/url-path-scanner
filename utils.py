@@ -1,13 +1,18 @@
 from urllib.parse import urlparse, ParseResult
 
-def check_list(parsed_url: ParseResult, pass_list: list=[], have_list: list=[], inval_paths: list=[]):
+def check_path(path: str, inval_paths: set=set()):
+    for inval_path in inval_paths:
+        if inval_path in path:
+            return inval_path
+    return False
+
+def check_list(parsed_url: ParseResult, pass_list: list=[], have_list: list=[], inval_paths: set=set()):
     scheme = parsed_url.scheme
     netloc = parsed_url.netloc
     path = parsed_url.path
 
-    for inval_path in inval_paths:
-        if inval_path in path:
-            return True
+    if check_path(path, inval_paths):
+        return True
 
     for pas in pass_list:
         if pas in netloc:

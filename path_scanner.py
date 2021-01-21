@@ -2,11 +2,12 @@ import requests
 from bs4 import BeautifulSoup
 from urllib.parse import urlparse
 from tqdm import tqdm
-from .utils import check_list, is_domain_self
+from .page_map import PageMap
+from .utils import check_path, check_list, is_domain_self
 
-INVAL_PATHS = ['=', '?', ' ', '<', '>']
+INVAL_PATHS = {'=', '?', ' ', '<', '>'}
 
-def gather_links(url: str, **kwargs):
+def gather_links(url: str, self_only: bool=True, path_only: bool=True, pass_list: list=[], have_list: list=[], inval_paths: set=set()):
     """
     Gathers all links of single url which can be accessible with "a" tag.
 
@@ -20,7 +21,7 @@ def gather_links(url: str, **kwargs):
 
     :param have_list: gathers only if the link contains the element of have_list
 
-    :return: list of found paths
+    :return: set of found paths
     """
     try:
         r = requests.get(url)
@@ -36,8 +37,7 @@ def gather_links(url: str, **kwargs):
     parsed_url_self = urlparse(url)
     path_self = parsed_url_self.path
 
-    pass_list = kwargs.get('pass_list') if kwargs.get('pass_list') is not None else []
-    have_list = kwargs.get('have_list') if kwargs.get('have_list') is not None else []
+    inval_paths |= INVAL_PATHS
 
     raw_links = []
     for a in soup.find_all('a'):
@@ -80,7 +80,7 @@ def gather_links(url: str, **kwargs):
         path = parsed_url.path
         domain_self = False
 
-        if check_list(parsed_url, pass_list, have_list, INVAL_PATHS):
+        if check_list(parsed_url, pass_list, have_list, inval_paths):
             continue
 
         if not parsed_url.scheme.startswith('http'):
@@ -96,75 +96,87 @@ def gather_links(url: str, **kwargs):
         
         link = f"{scheme}://{netloc}{path}"
 
-        if not domain_self and kwargs.get('self_only'):
+        if not domain_self and self_only:
             continue
 
-        if domain_self and kwargs.get('path_only'):
+        if domain_self and path_only:
             link = path
         
         links.append(link)
 
-    links = list(set(links))
+    links = set(links)
     return links
 
-def list_scan(urls: list, pass_list: list=[], have_list: list=[]):
+def list_scan(base_url: str, with_paths: set=('/'), pass_list: list=[], have_list: list=[]):
     """
-    Finds paths of url list which can be accessible with "a" tag.
+    Finds paths of base_url which can be accessible with "a" tag, with a set of paths to visit.
 
-    :param urls: list of start urls
+    :param base_url: f"{scheme}://{netloc}"
+
+    :param with_paths: set of paths to visit
 
     :param pass_list: gathers only if the path does not contain the element of pass_list
 
     :param have_list: gathers only if the path contains the element of have_list
     
-    :return: {... url: [paths]}
-    """
-    result = {}
-    for url in tqdm(urls):
-        path_list = gather_links(url, self_only=True, path_only=True, pass_list=pass_list, have_list=have_list)
-        result.update({url: path_list})
-    
-    return result
-
-def scanner(url: str, depth: int=100, pass_list: list=[], have_list: list=[]):
-    """
-    Finds all paths of url which can be accessible with "a" tag.
-
-    :param url: start url
-
-    :param depth: depth of search
-
-    :param pass_list: gathers only if the path does not contain the element of pass_list
-
-    :param have_list: gathers only if the path contains the element of have_list
-
-    :return: [paths]
+    :return: set of found paths
     """
 
-    parsed_url_self = urlparse(url)
-    base_url = f"{parsed_url_self.scheme}://{parsed_url_self.netloc}"
-
-    urls = [url]
     paths = set()
-    for _ in range(0, depth):
-        new_paths = set()
-        scan_result = list_scan(urls, pass_list, have_list)
-        for key in scan_result.keys():
-            new_paths |= set(scan_result[key])
-
-        urls = []
-        delete_paths = set()
-        for new_path in new_paths:
-            self_path = urlparse(base_url+new_path).path
-            if parsed_url_self.path == self_path:
-                delete_paths |= {new_path}
-                continue
-            urls.append(base_url+new_path)
-
-        new_paths -= delete_paths
-        if len(new_paths - paths) == 0:
-            break
+    
+    for with_path in tqdm(with_paths):
+        if not with_path.startswith('/'):
+            with_path = '/'+with_path
+        url = base_url+with_path
+        new_paths = gather_links(url, self_only=True, path_only=True, pass_list=pass_list, have_list=have_list)
 
         paths |= new_paths
 
-    return list(paths)
+    return paths
+
+def make_page_map(url: str, breadth: int=15, depth: int=100, pass_list: list=[], have_list: list=[]):
+    """
+
+    :param depth: depth of search
+    """
+
+    parsed_url = urlparse(url)
+    base_url = f"{parsed_url.scheme}://{parsed_url.netloc}"
+
+    visited = set()
+    too_many_paths = set()
+    visited_too_many = {}
+    page_map = PageMap(url, breadth)
+
+    if parsed_url.path != '':
+        new_paths = set(parsed_url.path)
+    else:
+        new_paths = set('/')
+    
+    for _ in range(0, depth):
+        found_paths = list_scan(base_url, new_paths, pass_list=pass_list, have_list=have_list)
+
+        new_paths = found_paths - visited
+        if len(new_paths) == 0:
+            break
+        visited |= new_paths
+        
+        for path in new_paths:
+            page_map.insert(path)
+
+        too_many_paths |= page_map.too_many
+        for too_many_path in too_many_paths:
+            visited_too_many.update({too_many_path: False})
+        
+        new_paths = set()
+        for new_path in (set(page_map.paths) - visited):
+            included_path = check_path(new_path, too_many_paths)
+
+            if included_path:
+                if visited_too_many[included_path]:
+                    continue
+                visited_too_many.update({included_path: True})
+            
+            new_paths.add(new_path)
+
+    return page_map.root
