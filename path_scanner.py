@@ -149,9 +149,15 @@ def make_page_map(url: str, breadth: int=15, depth: int=100, pass_list: list=[],
     page_map = PageMap(url, breadth)
 
     if parsed_url.path != '':
-        new_paths = set(parsed_url.path)
+        if parsed_url.query != '':
+            new_paths = {parsed_url.path+'?'+parsed_url.query}
+        else:
+            new_paths = {parsed_url.path}
     else:
-        new_paths = set('/')
+        if parsed_url.query != '':
+            new_paths = {'?'+parsed_url.query}
+        else:
+            new_paths = {'/'}
     
     for _ in range(0, depth):
         found_paths = list_scan(base_url, new_paths, pass_list=pass_list, have_list=have_list)
